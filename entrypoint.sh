@@ -60,18 +60,24 @@ else
     gen_conf > /etc/wireguard/wg.conf
 fi
 
+wg-quick up wg
+
+spawn socks5
+
 SUBNET=$(ip -o -f inet addr show dev eth0 | awk '{print $4}')
 IPADDR=$(echo "${SUBNET}" | cut -f1 -d'/')
 GATEWAY=$(route -n | grep 'UG[ \t]' | awk '{print $2}')
 eval "$(ipcalc -np "${SUBNET}")"
 
-ip rule add from "${IPADDR}" table 128
-ip route add table 128 to "${NETWORK}/${PREFIX}" dev eth0
-ip route add table 128 default via "${GATEWAY}"
+ip -4 rule del not fwmark 51820 table 51820
+ip -4 rule del table main suppress_prefixlength 0
 
-wg-quick up wg
+ip -4 rule add prio 10 from "${IPADDR}" table 128
+ip -4 route add table 128 to "${NETWORK}/${PREFIX}" dev eth0
+ip -4 route add table 128 default via "${GATEWAY}"
 
-spawn socks5
+ip -4 rule add prio 20 not fwmark 51820 table 51820
+ip -4 rule add prio 20 table main suppress_prefixlength 0
 
 if [[ -n "${WIREGUARD_UP}" ]]; then
     spawn "${WIREGUARD_UP}" "$@"
